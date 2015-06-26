@@ -11,10 +11,10 @@ class BaseWidget(Widget):
 
     def render(self, template):
         template = self.env.get_template(template)
-        return Markup(template.render(**self.data))
+        return Markup(template.render(**self.context))
 
 
-class SingleWidget(Widget):
+class SingleWidget(BaseWidget):
 
     def get_template(self):
         return self.template
@@ -27,13 +27,19 @@ class SingleWidget(Widget):
         pass
 
 
-class MultiWidget(Widget):
+class MultiWidget(BaseWidget):
+
+    prefix = None
 
     def get_template(self, name, prefix=None):
+        args = []
         prefix = prefix or self.prefix
-        return '%s/%s' % (prefix, name)
+        if prefix:
+            args.append(prefix)
+        args.append(name)
+        return '/'.join(args)
 
-    def render_for(self, name, data, prefix=None):
-        self.generate_data()
-        self.data.update(data)
+    def render_for(self, name, context, prefix=None):
+        self._create_context()
+        self.context.update(context)
         return self.render(self.get_template(name, prefix=prefix))
