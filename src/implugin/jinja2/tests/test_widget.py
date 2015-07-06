@@ -4,7 +4,6 @@ from mock import patch
 
 from pytest import fixture
 from pytest import yield_fixture
-from jinja2 import Template
 
 from impaf.widget import Widget
 
@@ -13,18 +12,13 @@ from ..widget import SingleWidget
 from ..widget import MultiWidget
 
 
-class MockedWidget(Widget):
+class MockedBaseWidget(Widget):
 
-    def feed_request(self, request):
-        self.flags = {}
-        self.request = MagicMock()
-        self.request.registry = {
-            'jinja2': sentinel.jinja2,
-        }
-        assert request == sentinel.request
+    pass
 
 
-class ExampleBaseWidget(BaseWidget, MockedWidget):
+class FakeBaseWidget(BaseWidget, MockedBaseWidget):
+
     pass
 
 
@@ -32,31 +26,39 @@ class TestBaseWidget(object):
 
     @fixture
     def widget(self):
-        return ExampleBaseWidget()
+        return FakeBaseWidget()
 
-    def test_feed_request(self, widget):
-        """
-        .feed_request should assign registry['jinja2'] to self.env
-        """
-        widget.feed_request(sentinel.request)
+    @fixture
+    def mrequest(self, widget):
+        request = MagicMock()
+        widget.request = request
+        return request
 
-        assert widget.flags == {}
-        assert widget.env == sentinel.jinja2
+    @fixture
+    def mjinja2(self, widget, mrequest):
+        return mrequest.registry.queryUtility.return_value
 
-    def test_render(self, widget):
+    @yield_fixture
+    def mMarkup(self):
+        patcher = patch('implugin.jinja2.widget.Markup')
+        with patcher as mock:
+            yield mock
+
+    def test_render(self, widget, mjinja2, mMarkup):
         """
         .render should render template from template link
         """
         template = 'url.to.module:template.jinja2'
-        widget.env = MagicMock()
-        widget.env.get_template.return_value = Template('hello {{me}}')
-        widget.context = {
-            'me': 'Felix',
-        }
+        context = {'my': 'context'}
+        widget.context = context
 
         markup = widget.render(template)
-        widget.env.get_template.assert_called_once_with(template)
-        assert str(markup) == 'hello Felix'
+
+        mjinja2.get_template.assert_called_once_with(template)
+        template = mjinja2.get_template.return_value
+        template.render.assert_called_once_with(**context)
+        mMarkup.assert_called_once_with(template.render.return_value)
+        assert markup == mMarkup.return_value
 
 
 class ExampleSingleWidget(SingleWidget):
@@ -119,6 +121,6 @@ class TestMultiWidget(object):
         assert widget.context == {
             'request': sentinel.request,
             'mycontext': sentinel.new,
-            'self': widget,
+            'widget': widget,
         }
         mrender.assert_called_once_with('mytemplate')

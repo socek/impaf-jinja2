@@ -2,15 +2,13 @@ from jinja2 import Markup
 
 from impaf.widget import Widget
 
+from .requestable import Jinja2Requestable
 
-class BaseWidget(Widget):
 
-    def feed_request(self, request):
-        super().feed_request(request)
-        self.env = self.registry['jinja2']
+class BaseWidget(Widget, Jinja2Requestable):
 
     def render(self, template):
-        template = self.env.get_template(template)
+        template = self.jinja2.get_template(template)
         return Markup(template.render(**self.context))
 
 
